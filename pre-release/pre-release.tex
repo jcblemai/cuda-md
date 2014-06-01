@@ -1,0 +1,94 @@
+\documentclass[a4wide,12pt]{article}
+\usepackage{a4wide}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel} 
+\usepackage{url}
+
+\usepackage{color}
+\usepackage{graphicx}
+\usepackage{fancyvrb}
+\usepackage{amsmath}
+
+\date{\today}
+
+
+\title{\textsc{GPU parallelization of a Molecular Dynamics Simulation}}
+
+\author{\textsc{Joseph Lemaitre}}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Molecular Dynamic (MD) simulation algorithm are known for being highly parallelization responsive~\cite{walters}.
+We aim to verify this affirmation by doing the parallelization of an 
+external C++ code~\cite{ljfluid} written by 
+Wolfgang Wieser. It's a MD simulation of a Lennard-Jones fluid. It provides
+a straight-forward approach to the problem, with an quasi-direct implementation of the 
+algorithm. It also comes with gnuplot-ready data logging allowing correctness verification.
+
+We will use NVIDIA's parallel computing architecture : CUDA.
+
+\end{abstract}
+
+\section{Presentation of the Problem}
+I will talk about the integration-method, the cut-off radius, the boundary conditions...
+
+\section{Parallelization}
+\subsection{Goal}
+I will explain why it's a slow algorithm, the costly steps and theirs complexity (force evaluation, time integration, ...) with maybe a profiling on 
+the single thread version. And then why CUDA, and why a speed-up is expected, talk about the fact that MD is non memory intensive...
+\subsection{Methods}
+There is several methods~\cite{plimpton} to parrallelize MD simulation. I will present them here and choose 
+one (or if I have time, several for comparison).
+
+
+
+\section{Implementation Details}
+All the remarks about the code, the problems encountered and their solutions
+will go here. I will write this section with the code.
+
+
+\section{Execution and Results}
+\subsection{Execution Setup}
+I will give information about
+\begin{itemize}
+    \item The simulation data (Number of atoms, Time-step, Cut-off radius...) for all the runs.
+    \item The hardware setup.
+    \item Software information (versions, flags...)
+    \item The bench-marking methodology.
+    \item Concerns about the accuracy and extensiveness of the evaluation.
+\end{itemize}
+
+\subsection{Results}
+Include graphics of speed-up in respect to the simulation data, discussions, possible amelioration. If I had the time
+to test several methods, I'll include a comparison.
+
+
+
+\begin{thebibliography}{10}
+
+\bibitem{ljfluid}
+Wolfgang Wieser.
+\newblock {{\it Simple molecular dynamics simulation of a Lennard-Jones fluid}},
+\newblock \url{http://www.triplespark.net/sim/ljfluid/}.
+
+\bibitem{walters}
+John Paul Walters, Vidyananth Balu, 
+Vipin Chaudhary, David Kofke, Andrew Schultz.
+\newblock {\it Accelerating Molecular Dynamics Simulations with GPUs}.
+\newblock University at Buffalo, Buffalo, NY 14260.
+
+\bibitem{plimpton}
+Steve Plimpton.
+\newblock {\it Fast Parallel Algorithms for Short–Range Molecular Dynamics},
+\newblock in the {\em Journal of Computational Physics}, vol 117, pages 1--19, 1995.
+
+
+
+
+\end{thebibliography}
+
+
+\end{document}
