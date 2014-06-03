@@ -80,6 +80,8 @@ inline double MINabs(double a,double b)
 inline int MINabs(int a,int b)
 	{  return(abs(a)<abs(b) ? a : b);  }
 
+
+
 // Random number in range -1..1: 
 inline double rand11()
 {
@@ -1077,6 +1079,9 @@ void SimFluid()
 
 int main()
 {
+	/* So we can compare the two outputs */
+	srand(1);
+	
 //@@--------------------------------------------------------------------
 // These are the gnuplot commands which set the output: 
 	printf("set term postsc color solid\n");

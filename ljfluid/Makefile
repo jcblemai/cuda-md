@@ -1,19 +1,23 @@
 #
 # Choose optimization suitable for your architecture by modifying the 
 # OPT settings: 
-OPT = -O2 -funit-at-a-time -ffast-math -finline-functions
+#OPT = -O2 -funit-at-a-time -ffast-math -finline-functions
 
 #OPT = -O2 -funit-at-a-time -ffast-math -march=athlon-xp -finline-functions
 # -malign-double
 
 # Compiler and linker to use: 
-CC=g++
-LD=g++
+CC=nvcc
+LD=nvcc
+
+NVCC=nvcc
+NVCFLAGS=-c -g -O3 -I$(CUDA_INC_PATH)  
+LDFLAGS= -L$(CUDA_LIB_PATH) -lcudart -lcuda
 
 
 
 .cc.o:
-	$(CC) $(OPT) -W -ffast-math -Wall -fno-rtti -fno-exceptions -c $<
+	$(CC) $(NVCFLAGS) $<
 
 all: fluid fluid-cuda
 
@@ -43,9 +47,7 @@ CUDA_INC_PATH=/usr/local/cuda/include
 CUDA_LIB_PATH=/usr/local/cuda/lib64
 
 
-NVCC=nvcc
-NVCFLAGS=-c -g -O3 -I$(CUDA_INC_PATH)  
-LDFLAGS= -L$(CUDA_LIB_PATH) -lcudart -lcuda
+
 
 fluid-cuda :
 	$(NVCC) $(NVCFLAGS) fluid.cu -o fluid-cuda.o

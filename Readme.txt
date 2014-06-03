@@ -36,4 +36,9 @@ Example :
 $./main Lena.png LenaBlur.png
 
 
-CUDA : no __gloval in calss
+CUDA : no __global__ in class
+
+too compare : diff 
+diff <(./fluid | gnuplot) <(./fluid-cuda | gnuplot)
+
+diff <(./fluid) <(./fluid-cuda)
