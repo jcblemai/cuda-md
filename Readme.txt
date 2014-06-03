@@ -42,3 +42,5 @@ too compare : diff
 diff <(./fluid | gnuplot) <(./fluid-cuda | gnuplot)
 
 diff <(./fluid) <(./fluid-cuda)
+
+Pas same entry --> c'est a cause des flags compilateurs --> meme flags

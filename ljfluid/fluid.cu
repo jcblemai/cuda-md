@@ -34,6 +34,7 @@
 #include <stdio.h>
 #include "alloc.h"
 #include <math.h>
+#include <cuda.h>
 
 // NOTE: If you do not have sys/time.h and/or gettimeofday(), remove this 
 //       #include statement and eliminate the runtime measurement which is 
@@ -64,6 +65,7 @@
 //  V0    -> 4 
 // --------------------------------------------
 
+
 template<typename T>inline T SQR(T x)
     {  return(x*x);  }
 template<typename T>inline T POW3(T x)
@@ -81,6 +83,17 @@ inline int MINabs(int a,int b)
     {  return(abs(a)<abs(b) ? a : b);  }
 
 
+/* Error handling macro from CUDA by Example book */
+static void HandleError( cudaError_t err,
+                         const char *file,
+                         int line ) {
+    if (err != cudaSuccess) {
+        printf( "%s in %s at line %d\n", cudaGetErrorString( err ),
+                file, line );
+        exit( EXIT_FAILURE );
+    }
+}
+#define HANDLE_ERROR( err ) (HandleError( err, __FILE__, __LINE__ ))
 
 
 // Random number in range -1..1: 
@@ -119,9 +132,16 @@ struct Accel
 
 // Particle array and number of particles. 
 Particle *P,*Pend;   // Pend=P+np
+
+// Particle array on the device
+Particle *Pdev;
+
 int np;
 // Current accelerations: 
 Accel *A;
+
+// Current accelerations on the device
+Accel *Adev;
 
 // Simulation time step:
 double dt;
@@ -227,7 +247,7 @@ void Initialize(int n,double _dt,double _rho,double _cutoff_r,
 void InitializePCF(int _npcf,double _rmax);
 
 // Compute a simulation step: 
-void SimulationStep();
+__global__ void SimulationStep(Particle* Pdev, Accel* Adev, int np);
 
 // Compute total kinetic energy (returned) and impulse (stored in 
 // ptot[]). 
@@ -276,6 +296,9 @@ void Clear()
     Pend=NULL;
     np=0;
     A=FREE(A);
+    
+    HANDLE_ERROR(cudaFree(Adev));
+    HANDLE_ERROR(cudaFree(Pdev));
     
     npcf=0;
     pcf_sum=FREE(pcf_sum);
@@ -406,6 +429,13 @@ void Initialize(int n,double _dt,double _rho,double _cutoff_r,
     
     // Compute initial values for the acceleration: 
     _CalcAccel();
+    
+    // Copy on device
+    HANDLE_ERROR(cudaMalloc((void **)& Adev, np*sizeof(Accel)));
+    HANDLE_ERROR(cudaMalloc((void **)& Pdev, np*sizeof(Particle)));
+    HANDLE_ERROR(cudaMemcpy(Adev, A, np*sizeof(Accel), cudaMemcpyHostToDevice));
+    HANDLE_ERROR(cudaMemcpy(Pdev, P, np*sizeof(Particle), cudaMemcpyHostToDevice));
+    
 }
 
 
@@ -688,11 +718,12 @@ double ComputePressure(const double *pcf,int n,double rmax,
 }
 
 
-void SimulationStep()
+__global__ void SimulationStep(Particle* Pdev, Accel* Adev, int np)
 {
+	
     // Calculate a simulation step. 
     double dt2=0.5*dt;
-    Accel *a=A;
+    Accel *a=Adev; //TODO why
 
 //@@--------------------------------------------------------------------
 // User tunable parameter: 
@@ -704,9 +735,9 @@ void SimulationStep()
 //#define COOL_FACT *0.997
 #define COOL_FACT
 //@@--------------------------------------------------------------------
+	assert(blockIdx.x < np);
+	Particle *p = p + blockIdx.x;
 
-    for(Particle *p=P; p<Pend; p++,a++)
-    {
         for(int i=0; i<3; i++)
         {
             double adt2 = a->a[i]*dt2;
@@ -718,10 +749,11 @@ if(p->r[i]<-L || p->r[i]>L+L)  fprintf(stderr,"OOPS: p[%d].r[%d]=%g\n",p-P,i,p->
 assert(p->r[i]>=0.0 && p->r[i]<=L);
             p->v[i] = (p->v[i] + adt2) COOL_FACT;
         }
+        /*
 #if USE_INT_ARITH
         _SetIR(p);
 #endif
-    }
+
     
     _CalcAccel();
     
@@ -731,7 +763,7 @@ assert(p->r[i]>=0.0 && p->r[i]<=L);
         p->v[0] = (p->v[0] + a->a[0]*dt2) COOL_FACT;
         p->v[1] = (p->v[1] + a->a[1]*dt2) COOL_FACT;
         p->v[2] = (p->v[2] + a->a[2]*dt2) COOL_FACT;
-    }
+    */
 }
 
 
@@ -956,7 +988,7 @@ int main()
     double max_s=-1.0;
     for(iter=0; iter<max_steps; iter++)
     {
-        SimulationStep();
+        SimulationStep<<<np,1>>>(Pdev, Adev, np);
         
         bool do_sample = (iter>pcf_skip && !(iter%pcf_samples));
         bool do_dump = (!(iter%dumpfreq) || iter+1==max_steps);
