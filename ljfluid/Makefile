@@ -7,13 +7,15 @@ OPT = -O2 -funit-at-a-time -ffast-math -finline-functions
 # -malign-double
 
 # Compiler and linker to use: 
-CC=g++
-LD=g++
+CC=nvcc
+LD=nvcc
+
+
 
 .cc.o:
 	$(CC) $(OPT) -W -ffast-math -Wall -fno-rtti -fno-exceptions -c $<
 
-all: fluid
+all: fluid fluid-cuda
 
 run: all
 	/usr/bin/time ./fluid | gnuplot
@@ -23,7 +25,7 @@ fluid: fluid.o alloc.o
 	$(LD) fluid.o alloc.o -o fluid -lm
 
 clean:
-	-rm fluid.o alloc.o
+	-rm *.o
 
 dist:
 	mkdir ljfluid && \
@@ -33,3 +35,21 @@ dist:
 
 alloc.o: alloc.cc alloc.h
 fluid.o: fluid.cc alloc.h
+
+#CUDA part
+
+CUDA_INC_PATH=/usr/local/cuda/include
+CUDA_LIB_PATH=/usr/local/cuda/lib64
+
+
+NVCC=nvcc
+NVCFLAGS=-c -g -O3 -I$(CUDA_INC_PATH)  
+LDFLAGS= -L$(CUDA_LIB_PATH) -lcudart -lcuda
+
+fluid-cuda :
+	$(NVCC) $(NVCFLAGS) fluid.cu -o fluid-cuda.o
+	$(NVCC) $(LDFLAGS) fluid-cuda.o alloc.o -o fluid-cuda
+
+
+
+
