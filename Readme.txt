@@ -34,3 +34,6 @@ If it already exist, it will be overwritten
 Example : 
 
 $./main Lena.png LenaBlur.png
+
+
+CUDA : no __gloval in calss

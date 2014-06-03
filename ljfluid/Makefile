@@ -7,8 +7,8 @@ OPT = -O2 -funit-at-a-time -ffast-math -finline-functions
 # -malign-double
 
 # Compiler and linker to use: 
-CC=nvcc
-LD=nvcc
+CC=g++
+LD=g++
 
 
 
@@ -26,6 +26,7 @@ fluid: fluid.o alloc.o
 
 clean:
 	-rm *.o
+	-rm fluid fluid-cuda
 
 dist:
 	mkdir ljfluid && \
@@ -48,7 +49,8 @@ LDFLAGS= -L$(CUDA_LIB_PATH) -lcudart -lcuda
 
 fluid-cuda :
 	$(NVCC) $(NVCFLAGS) fluid.cu -o fluid-cuda.o
-	$(NVCC) $(LDFLAGS) fluid-cuda.o alloc.o -o fluid-cuda
+	$(NVCC) $(NVCFLAGS) alloc.cc -o alloc-cuda.o
+	$(NVCC) $(LDFLAGS) fluid-cuda.o alloc-cuda.o -o fluid-cuda
 
 
 
