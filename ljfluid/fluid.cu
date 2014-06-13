@@ -44,11 +44,6 @@
 
 #include <assert.h>
 
-// Setting this to 1 will additionally use integer arithmetic for the 
-// initial distance check. Expect little speed increase (maybe better for 
-// larger box sizes and small cutoff radi). 
-#define USE_INT_ARITH 0
-
 
 // Calculation in reduced sizes: 
 //  [ Lennard-Jones potential: V(r) = V0 * (r/sigma)^-12 - (r/sigma)^-6 ]
@@ -105,20 +100,12 @@ inline double rand11()
 }
 
 
-#if USE_INT_ARITH
-typedef int intpos_t;
-#endif
-
-
 
 // Representing a particle: 
 struct Particle
 {
     double r[3];   // location
     double v[3];   // speed
-#if USE_INT_ARITH
-    intpos_t ir[3];  // integer grid coordinates (approx for r)
-#endif
 };
 
 // Represent acceleration: 
@@ -160,13 +147,6 @@ double *pcf_sum;
 double *pcf_sum2;
 int pcf_samples;   // number of samlples accumulated so far
 
-#if USE_INT_ARITH
-// Integer coos scale factors: 
-double r2ir;
-// Integer corrs are in range 0..irmax-1
-intpos_t irmax;
-#endif
-
 // Some simulation statistics: 
 int nskip0;
 int nskip1;
@@ -203,15 +183,6 @@ static inline double potential_w(double r)
     return(24*r6*(1-2*r6));
 }
 
-#if USE_INT_ARITH
-// Computer integer grid coos: 
-inline void _SetIR(Particle *p)
-{
-    p->ir[0]=intpos_t(p->r[0]*r2ir);
-    p->ir[1]=intpos_t(p->r[1]*r2ir);
-    p->ir[2]=intpos_t(p->r[2]*r2ir);
-}
-#endif
 
 // Calculate the current accelerations: 
 void _CalcAccel();
@@ -338,11 +309,6 @@ void Initialize(int n,double _dt,double _rho,double _cutoff_r,
     L=pow(np/_rho,1.0/3.0);
     cutoff_r=_cutoff_r;
     
-#if USE_INT_ARITH
-    irmax=1<<13;  // make sure irmax*irmax < max value
-    r2ir=irmax/L;
-#endif
-    
     // We have n particles in a box of size L x L x L. 
     // To distribute them regularly on a rectangular grid, this grid 
     // needs to have the size gsize: 
@@ -378,10 +344,6 @@ void Initialize(int n,double _dt,double _rho,double _cutoff_r,
         p->r[0] = L_gsize*( gx+0.5 + rand11()*displacement_fact );
         p->r[1] = L_gsize*( gy+0.5 + rand11()*displacement_fact );
         p->r[2] = L_gsize*( gz+0.5 + rand11()*displacement_fact );
-        
-#if USE_INT_ARITH
-        _SetIR(p);
-#endif
         
         // Initial velocity: 
         p->v[0]= rand11()*initial_speed;
@@ -473,15 +435,6 @@ void _CalcAccel()
     double cutoff_r2=cutoff_r*cutoff_r;
     double L2=0.5*L;
     
-#if USE_INT_ARITH
-    intpos_t iL=irmax;  //intpos_t(L*r2ir);
-    intpos_t iL2=irmax/2;  //intpos_t(L2*r2ir);
-    intpos_t icutoff_r=intpos_t(cutoff_r*r2ir)+3;
-    intpos_t iLcutoff_r=iL-icutoff_r;
-    intpos_t icutoff_r2=intpos_t(cutoff_r2*r2ir*r2ir)+16;
-    //fprintf(stderr,">%d<\n",icutoff_r2);
-#endif
-    
     nskip0=0;
     nskip1=0;
     ncalc=0;
@@ -490,9 +443,7 @@ void _CalcAccel()
     
     int i=0;
     double wp[3];
-#if USE_INT_ARITH
-    intpos_t iwp[3];
-#endif
+    
     for(Particle *p=P; p<Pend; p++,i++)
     {
         // Calculate the current acceleration for particle *p: 
@@ -500,20 +451,10 @@ void _CalcAccel()
         // We have periodic boundary conditions here. 
         // In case the particle is enough far away from the box 
         // borders, there is no need for special treatment. 
-#if USE_INT_ARITH
-        bool on_border=0;
-        if(p->ir[0]<icutoff_r || p->ir[1]<icutoff_r || p->ir[2]<icutoff_r || 
-           p->ir[0]>=iLcutoff_r || p->ir[1]>=iLcutoff_r || p->ir[2]>=iLcutoff_r)
-        {
-            on_border=
-                !(p->r[0]>=cutoff_r && p->r[1]>=cutoff_r && p->r[2]>=cutoff_r && 
-                  p->r[0]<Lcutoff_r && p->r[1]<Lcutoff_r && p->r[2]<Lcutoff_r );
-        }
-#else
+
         bool on_border=
             !(p->r[0]>=cutoff_r && p->r[1]>=cutoff_r && p->r[2]>=cutoff_r && 
               p->r[0]<Lcutoff_r && p->r[1]<Lcutoff_r && p->r[2]<Lcutoff_r );
-#endif
         if(on_border)
         {
             // Need special treatment for periodic BC: wrap around edge. 
@@ -521,36 +462,12 @@ void _CalcAccel()
             wp[0] = p->r[0]<L2 ? p->r[0]+L : p->r[0]-L;
             wp[1] = p->r[1]<L2 ? p->r[1]+L : p->r[1]-L;
             wp[2] = p->r[2]<L2 ? p->r[2]+L : p->r[2]-L;
-#if USE_INT_ARITH
-            iwp[0] = p->ir[0]<iL2 ? p->ir[0]+iL : p->ir[0]-iL;
-            iwp[1] = p->ir[1]<iL2 ? p->ir[1]+iL : p->ir[1]-iL;
-            iwp[2] = p->ir[2]<iL2 ? p->ir[2]+iL : p->ir[2]-iL;
-#endif
             ++nborder;
         }
         
         int j=i+1;
         for(Particle *k=p+1; k<Pend; k++,j++)
         {
-#if USE_INT_ARITH
-            intpos_t idr[3]={
-                k->ir[0]-p->ir[0],
-                k->ir[1]-p->ir[1],
-                k->ir[2]-p->ir[2] };
-            if(on_border)
-            {
-                idr[0] = MINabs( idr[0], k->ir[0]-iwp[0] );
-                idr[1] = MINabs( idr[1], k->ir[1]-iwp[1] );
-                idr[2] = MINabs( idr[2], k->ir[2]-iwp[2] );
-            }
-            
-            //if(idr[0]>=icutoff_r || idr[1]>=icutoff_r || idr[2]>=icutoff_r) 
-            //{  ++nskip0;  continue;  }
-            int ir2=SQR(idr[0])+SQR(idr[1])+SQR(idr[2]);
-            if(ir2>=icutoff_r2)
-            {  ++nskip0;  continue;  }
-#endif
-            
             double dr[3]={
                 k->r[0]-p->r[0],
                 k->r[1]-p->r[1],
@@ -718,12 +635,12 @@ double ComputePressure(const double *pcf,int n,double rmax,
 }
 
 
-__global__ void SimulationStep(Particle* Pdev, Accel* Adev, int np)
+__global__ void SimulationStep(Particle* Pdev, Accel* Adev, double dt, double L, int np)
 {
 	
     // Calculate a simulation step. 
     double dt2=0.5*dt;
-    Accel *a=Adev; //TODO why
+    Accel *a=Adev + blockIdx.x;
 
 //@@--------------------------------------------------------------------
 // User tunable parameter: 
@@ -735,35 +652,31 @@ __global__ void SimulationStep(Particle* Pdev, Accel* Adev, int np)
 //#define COOL_FACT *0.997
 #define COOL_FACT
 //@@--------------------------------------------------------------------
-	assert(blockIdx.x < np);
-	Particle *p = p + blockIdx.x;
+	//assert(blockIdx.x < np);
+	Particle *p = Pdev + blockIdx.x;
 
         for(int i=0; i<3; i++)
         {
             double adt2 = a->a[i]*dt2;
             p->r[i] += p->v[i]*dt + adt2*dt;
-assert(finite(p->r[i]));
-if(p->r[i]<-L || p->r[i]>L+L)  fprintf(stderr,"OOPS: p[%d].r[%d]=%g\n",p-P,i,p->r[i]);
+//assert(finite(p->r[i]));
+//if(p->r[i]<-L || p->r[i]>L+L)  fprintf(stderr,"OOPS: p[%d].r[%d]=%g\n",p-P,i,p->r[i]);
                  if(p->r[i]<0.0)   p->r[i]=L-fmod(-p->r[i],L);
             else if(p->r[i]>=L)    p->r[i]=fmod(p->r[i],L);
-assert(p->r[i]>=0.0 && p->r[i]<=L);
+//assert(p->r[i]>=0.0 && p->r[i]<=L);
             p->v[i] = (p->v[i] + adt2) COOL_FACT;
         }
-        /*
-#if USE_INT_ARITH
-        _SetIR(p);
-#endif
 
     
     _CalcAccel();
     
-    a=A;
-    for(Particle *p=P; p<Pend; p++,a++)
-    {   
+    /* redundant *7
+    a=Adev + blockIdx.x;
+    Particle *p = Pdev + blockIdx.x;
+
         p->v[0] = (p->v[0] + a->a[0]*dt2) COOL_FACT;
         p->v[1] = (p->v[1] + a->a[1]*dt2) COOL_FACT;
         p->v[2] = (p->v[2] + a->a[2]*dt2) COOL_FACT;
-    */
 }
 
 
@@ -988,7 +901,7 @@ int main()
     double max_s=-1.0;
     for(iter=0; iter<max_steps; iter++)
     {
-        SimulationStep<<<np,1>>>(Pdev, Adev, np);
+        SimulationStep<<<np,1>>>(Pdev, Adev, dt, L, np);
         
         bool do_sample = (iter>pcf_skip && !(iter%pcf_samples));
         bool do_dump = (!(iter%dumpfreq) || iter+1==max_steps);
