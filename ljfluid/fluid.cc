@@ -881,7 +881,7 @@ void SimFluid()
 	
 	//sim.Initialize(500,/*dt=*/5e-3,/*rho=*/1.3,/*cutoff_r=*/3.0,
 	//	/*initial_speed=*/1.0);
-	sim.Initialize(500,/*dt=*/5e-3,/*rho=*/1.2,/*cutoff_r=*/3.0,
+	sim.Initialize(2074,/*dt=*/5e-3,/*rho=*/1.2,/*cutoff_r=*/3.0,
 		/*initial_speed=*/3.0);
 	sim.InitializePCF(200,3.5);
 	
@@ -933,7 +933,7 @@ void SimFluid()
 	if(!curr_fp)
 	{  fprintf(stderr,"Failed to open %s.\n",curr_file);  exit(1);  }
 	
-	sim.PlotAllParticles();
+	//sim.PlotAllParticles();
 	
 	double pcf[sim.get_npcf()];
 	double pcf_s[sim.get_npcf()];
@@ -981,7 +981,7 @@ void SimFluid()
 				sim.get_npcf(),sim.get_pcf_rmax(),T_curr);
 		}
 		
-		if(do_write_curr)  // Write current state: 
+		/*if(do_write_curr)  // Write current state: 
 		{  fprintf(curr_fp,"%d %g %g %g\n",iter,T_curr,E_N,p_curr);  }
 		
 		if(do_sample)
@@ -1014,7 +1014,7 @@ void SimFluid()
 				iter,VLENGTH3(ptot),Ekin,T_curr,
 				Epot,E_N,p_curr);
 			sim.PlotAllParticles();
-		}
+		}*/
 	}
 	
 	fclose(curr_fp);

@@ -108,6 +108,12 @@ struct Particle
     double v[3];   // speed
 };
 
+struct Cell
+{
+	int* particleId; //list of the id of the particle in the Pdev list
+	int numberPart;	//number of Particle
+};
+
 // Represent acceleration: 
 // This is not stored with the particle as it is not part of the 
 // state of the particle. 
@@ -122,6 +128,13 @@ Particle *P,*Pend;   // Pend=P+np
 
 // Particle array on the device
 Particle *Pdev;
+
+//Our cells array :
+Cell *C;
+int nbCellPerAxis;
+int nbCell;
+int maxAtomPerCell;
+double cellSize;
 
 int np;
 // Current accelerations: 
@@ -218,7 +231,7 @@ void Initialize(int n,double _dt,double _rho,double _cutoff_r,
 void InitializePCF(int _npcf,double _rmax);
 
 // Compute a simulation step: 
-__global__ void SimulationStep(Particle* Pdev, Accel* Adev, int np);
+//__global__ void SimulationStep(Particle* Pdev, Accel* Adev, int np);
 
 // Compute total kinetic energy (returned) and impulse (stored in 
 // ptot[]). 
@@ -305,6 +318,7 @@ void Initialize(int n,double _dt,double _rho,double _cutoff_r,
     Pend=P+np;
     A=ALLOC<Accel>(np);
     
+    
     dt=_dt;
     L=pow(np/_rho,1.0/3.0);
     cutoff_r=_cutoff_r;
@@ -366,23 +380,7 @@ void Initialize(int n,double _dt,double _rho,double _cutoff_r,
         p->v[1]-=ptot[1];
         p->v[2]-=ptot[2];
     }
-    
-#if 0
-    // Testing purposes only: 
-    P[0].r[0]=L-1;
-    P[0].r[1]=
-    P[0].r[2]=0.5*L;
-    P[1].r[0]=0+1;
-    P[1].r[1]=
-    P[1].r[2]=0.5*L;
-    
-    P[0].v[0]=
-    P[0].v[1]=
-    P[0].v[2]=
-    P[1].v[0]=
-    P[1].v[1]=
-    P[1].v[2]=0.0;
-#endif
+ 
     
     // Calculate kinetic energy and accumulated impulse (as a check): 
     double Ekin=CalcEnergyAndImpulse(ptot);
@@ -423,7 +421,7 @@ double CalcEnergyAndImpulse(double *ptot)
 
 
 void _CalcAccel()
-{
+{    
     for(Accel *a=A,*Aend=A+np; a<Aend; a++)
     {
         a->a[0]=0.0;
@@ -500,6 +498,7 @@ void _CalcAccel()
         }
     }
 }
+
 
 
 void ComputePCF(double *pcf,int n,double rmax,
@@ -635,12 +634,11 @@ double ComputePressure(const double *pcf,int n,double rmax,
 }
 
 
-__global__ void SimulationStep(Particle* Pdev, Accel* Adev, double dt, double L, int np)
+void SimulationStep()
 {
-	
-    // Calculate a simulation step. 
-    double dt2=0.5*dt;
-    Accel *a=Adev + blockIdx.x;
+	// Calculate a simulation step. 
+	double dt2=0.5*dt;
+	Accel *a=A;
 
 //@@--------------------------------------------------------------------
 // User tunable parameter: 
@@ -652,33 +650,32 @@ __global__ void SimulationStep(Particle* Pdev, Accel* Adev, double dt, double L,
 //#define COOL_FACT *0.997
 #define COOL_FACT
 //@@--------------------------------------------------------------------
-	//assert(blockIdx.x < np);
-	Particle *p = Pdev + blockIdx.x;
 
-        for(int i=0; i<3; i++)
-        {
-            double adt2 = a->a[i]*dt2;
-            p->r[i] += p->v[i]*dt + adt2*dt;
-//assert(finite(p->r[i]));
-//if(p->r[i]<-L || p->r[i]>L+L)  fprintf(stderr,"OOPS: p[%d].r[%d]=%g\n",p-P,i,p->r[i]);
-                 if(p->r[i]<0.0)   p->r[i]=L-fmod(-p->r[i],L);
-            else if(p->r[i]>=L)    p->r[i]=fmod(p->r[i],L);
-//assert(p->r[i]>=0.0 && p->r[i]<=L);
-            p->v[i] = (p->v[i] + adt2) COOL_FACT;
-        }
-
-    
-    _CalcAccel();
-    
-    /* redundant *7
-    a=Adev + blockIdx.x;
-    Particle *p = Pdev + blockIdx.x;
-
-        p->v[0] = (p->v[0] + a->a[0]*dt2) COOL_FACT;
-        p->v[1] = (p->v[1] + a->a[1]*dt2) COOL_FACT;
-        p->v[2] = (p->v[2] + a->a[2]*dt2) COOL_FACT;
+	for(Particle *p=P; p<Pend; p++,a++)
+	{
+		for(int i=0; i<3; i++)
+		{
+			double adt2 = a->a[i]*dt2;
+			p->r[i] += p->v[i]*dt + adt2*dt;
+assert(finite(p->r[i]));
+if(p->r[i]<-L || p->r[i]>L+L)  fprintf(stderr,"OOPS: p[%d].r[%d]=%g\n",p-P,i,p->r[i]);
+			     if(p->r[i]<0.0)   p->r[i]=L-fmod(-p->r[i],L);
+			else if(p->r[i]>=L)    p->r[i]=fmod(p->r[i],L);
+assert(p->r[i]>=0.0 && p->r[i]<=L);
+			p->v[i] = (p->v[i] + adt2) COOL_FACT;
+		}
+	}
+	
+	_CalcAccel();
+	
+	a=A;
+	for(Particle *p=P; p<Pend; p++,a++)
+	{	
+		p->v[0] = (p->v[0] + a->a[0]*dt2) COOL_FACT;
+		p->v[1] = (p->v[1] + a->a[1]*dt2) COOL_FACT;
+		p->v[2] = (p->v[2] + a->a[2]*dt2) COOL_FACT;
+	}
 }
-
 
 // Plot mainly useful for debugging reasons: 
 void PlotAllParticles()
@@ -770,6 +767,40 @@ void initSimulation()
     pcf_sum2=NULL;
 }
 
+/* Return the number of the cell that containt the atom */
+int cellNumber(Particle* p)
+{
+	int cellNumber = (floor(p->r[0]/(float)cellSize) + 
+	floor(p->r[1]/(float)cellSize) * nbCellPerAxis + 
+	floor(p->r[2]/(float)cellSize) * nbCellPerAxis*nbCellPerAxis);
+	if (cellNumber < nbCell)
+		return cellNumber;
+	else
+	{
+		printf("ATOM WITHOUT CELL !!!\n");
+		return nbCell-1;
+	}
+}
+
+void updateCell()
+{
+	for(Cell *c=C; c<(C+nbCell); c++)
+	{
+		c->numberPart = 0;
+		for (int i = 0; i < maxAtomPerCell; i++)
+		{
+			c->particleId[i] = -1;
+		}
+	}
+	for(Particle *p=P; p<Pend; p++)
+	{
+		Cell* partCell = & C[cellNumber(p)];
+		partCell->particleId[partCell->numberPart] = p - P;
+		partCell->numberPart++;
+		
+	}
+}
+
 void deleteSimulation()
 {
     Clear();
@@ -834,9 +865,32 @@ int main()
     
     //Initialize(500,/*dt=*/5e-3,/*rho=*/1.3,/*cutoff_r=*/3.0,
     //  /*initial_speed=*/1.0);
-    Initialize(500,/*dt=*/5e-3,/*rho=*/1.2,/*cutoff_r=*/3.0,
+    Initialize(2074,/*dt=*/5e-3,/*rho=*/1.2,/*cutoff_r=*/3.0,
         /*initial_speed=*/3.0);
     InitializePCF(200,3.5);
+    
+    //Initialize Cell WARNING : should me a multiple !
+    cellSize = cutoff_r;
+    nbCellPerAxis = floor(L/cellSize);
+    nbCell = pow(nbCellPerAxis,3);
+    maxAtomPerCell = 1.5*np/(float)nbCell ; // max number is 1.5* the expected number
+    
+    C=ALLOC<Cell>(nbCell); // TODO FREE
+    for(Cell *c=C; c<(C+nbCell); c++)
+	{
+		c->particleId = ALLOC<int>(maxAtomPerCell);
+	}
+    
+   updateCell();
+   //DEBUG BOX
+    printf(" L= %f np = %d %f %d %d %d\n", L,  np, cellSize, nbCellPerAxis, nbCell , maxAtomPerCell);
+    /*for(Cell *c=C; c<(C+nbCell); c++)
+	{
+		printf("%d : %d \n",c-C,c->numberPart);
+		for(int i = 0; i < maxAtomPerCell; i++)
+			printf("%d ",c->particleId[i]);
+		printf("\n");
+	}*/
     
     //Initialize(1000,/*dt=*/0.5e-3,/*rho=*/0.95,/*cutoff_r=*/3.5,
     //  /*initial_speed=*/0.8);  // 1.0
@@ -886,7 +940,7 @@ int main()
     if(!curr_fp)
     {  fprintf(stderr,"Failed to open %s.\n",curr_file);  exit(1);  }
     
-    PlotAllParticles();
+    //PlotAllParticles();
     
     double pcf[get_npcf()];
     double pcf_s[get_npcf()];
@@ -901,7 +955,17 @@ int main()
     double max_s=-1.0;
     for(iter=0; iter<max_steps; iter++)
     {
-        SimulationStep<<<np,1>>>(Pdev, Adev, dt, L, np);
+		/*for(Cell *c=C; c<(C+nbCell); c++)
+		{
+			printf("%d : %d |",c-C,c->numberPart);
+		}printf("\n");*/
+		printf("%d : %d \n",6,(C+6)->numberPart);
+		//UpdateCell<<<nbCell, maxAtomPerCell>>>
+        //SimulationPredictor<<<nbCell, maxAtomPerCell>>>(Pdev, Adev, dt, cutoff_r, L, np);
+        //SimulationAcceleration<<<nbCell ,maxAtomPerCell>>>
+        //SimulationCorrector<<<nbCell, maxAtomPerCell>>>
+        SimulationStep();
+        updateCell();
         
         bool do_sample = (iter>pcf_skip && !(iter%pcf_samples));
         bool do_dump = (!(iter%dumpfreq) || iter+1==max_steps);
@@ -934,7 +998,7 @@ int main()
                 get_npcf(),get_pcf_rmax(),T_curr);
         }
         
-        if(do_write_curr)  // Write current state: 
+        /*if(do_write_curr)  // Write current state: 
         {  fprintf(curr_fp,"%d %g %g %g\n",iter,T_curr,E_N,p_curr);  }
         
         if(do_sample)
@@ -966,8 +1030,8 @@ int main()
                 "E_pot=%g, E/N=%g, p=%g\n",
                 iter,VLENGTH3(ptot),Ekin,T_curr,
                 Epot,E_N,p_curr);
-            PlotAllParticles();
-        }
+            //PlotAllParticles();
+        }*/
     }
     
     fclose(curr_fp);
@@ -1027,6 +1091,7 @@ int main()
             E_sum/nacc,
             p_sum/nacc);
     }
+    
     deleteSimulation();
     return EXIT_SUCCESS;
 }
