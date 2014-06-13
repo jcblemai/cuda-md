@@ -384,22 +384,7 @@ void FluidSimulator::Initialize(int n,double _dt,double _rho,double _cutoff_r,
 		p->v[2]-=ptot[2];
 	}
 	
-#if 0
-	// Testing purposes only: 
-	P[0].r[0]=L-1;
-	P[0].r[1]=
-	P[0].r[2]=0.5*L;
-	P[1].r[0]=0+1;
-	P[1].r[1]=
-	P[1].r[2]=0.5*L;
-	
-	P[0].v[0]=
-	P[0].v[1]=
-	P[0].v[2]=
-	P[1].v[0]=
-	P[1].v[1]=
-	P[1].v[2]=0.0;
-#endif
+
 	
 	// Calculate kinetic energy and accumulated impulse (as a check): 
 	double Ekin=CalcEnergyAndImpulse(ptot);
@@ -912,8 +897,8 @@ void SimFluid()
 //   standard deviation and
 // on the bottom a normalized velocity distribution (particle serial 
 // number versus speed). 
-// 
-	int max_steps=100000;  // Max number of <dt> steps to calculate. 
+//
+	int max_steps=1000;  // Max number of <dt> steps to calculate. 
 	int pcf_samples=8;   // Compute PCF every this many dt cycles. 
 	int pcf_skip=400;    // Skip these many steps before PCF accumulation
 	int dumpfreq=100;    // Dump status every this many dt cycles. 
@@ -981,7 +966,7 @@ void SimFluid()
 				sim.get_npcf(),sim.get_pcf_rmax(),T_curr);
 		}
 		
-		/*if(do_write_curr)  // Write current state: 
+		if(do_write_curr)  // Write current state: 
 		{  fprintf(curr_fp,"%d %g %g %g\n",iter,T_curr,E_N,p_curr);  }
 		
 		if(do_sample)
@@ -1000,7 +985,7 @@ void SimFluid()
 			}
 		}
 		
-		if(do_dump)
+		/*if(do_dump)
 		{
 			fflush(curr_fp);
 			// Dump some information to the user: 
@@ -1013,7 +998,7 @@ void SimFluid()
 				"E_pot=%g, E/N=%g, p=%g\n",
 				iter,VLENGTH3(ptot),Ekin,T_curr,
 				Epot,E_N,p_curr);
-			sim.PlotAllParticles();
+			//sim.PlotAllParticles();
 		}*/
 	}
 	
