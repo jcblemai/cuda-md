@@ -866,7 +866,7 @@ void SimFluid()
 	
 	//sim.Initialize(500,/*dt=*/5e-3,/*rho=*/1.3,/*cutoff_r=*/3.0,
 	//	/*initial_speed=*/1.0);
-	sim.Initialize(2074,/*dt=*/5e-3,/*rho=*/1.2,/*cutoff_r=*/3.0,
+	sim.Initialize(2074,/*dt=*/5e-3,/*rho=*/1.2,/*cutoff_r=*/1.0,
 		/*initial_speed=*/3.0);
 	sim.InitializePCF(200,3.5);
 	
@@ -898,7 +898,7 @@ void SimFluid()
 // on the bottom a normalized velocity distribution (particle serial 
 // number versus speed). 
 //
-	int max_steps=1000;  // Max number of <dt> steps to calculate. 
+	int max_steps=100;  // Max number of <dt> steps to calculate. 
 	int pcf_samples=8;   // Compute PCF every this many dt cycles. 
 	int pcf_skip=400;    // Skip these many steps before PCF accumulation
 	int dumpfreq=100;    // Dump status every this many dt cycles. 
