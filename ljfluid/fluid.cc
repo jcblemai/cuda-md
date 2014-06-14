@@ -933,6 +933,7 @@ void SimFluid()
 	double max_s=-1.0;
 	for(iter=0; iter<max_steps; iter++)
 	{
+		printf("Step %d\n",iter);
 		sim.SimulationStep();
 		
 		bool do_sample = (iter>pcf_skip && !(iter%pcf_samples));
@@ -949,6 +950,7 @@ void SimFluid()
 		
 		if(do_write_curr || do_sample || do_dump)
 		{
+			printf("Time to log\n");
 			// Now as we have the current PCF, we can compute the current 
 			// potential energy. 
 			Epot=sim.ComputeEpot(curr_pcf,

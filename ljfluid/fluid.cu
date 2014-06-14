@@ -35,6 +35,7 @@
 #include "alloc.h"
 #include <math.h>
 #include <cuda.h>
+#include "cuPrintf.cu"
 
 // NOTE: If you do not have sys/time.h and/or gettimeofday(), remove this 
 //       #include statement and eliminate the runtime measurement which is 
@@ -647,6 +648,13 @@ double ComputePressure(const double *pcf,int n,double rmax,
     return(sum/POW3(L));
 }
 
+__device__ int modu(int a, int b)
+{
+   int ret = a % b;
+   if(ret < 0)
+     ret+=b;
+   return ret;
+}
 
 __global__ void SimulationStepAcceleration(Particle *Pdev, Accel *Adev, Cell *Cdev, 
 const int maxAtomPerCell, int nbCellPerAxis, int nbCell, double dt, 
@@ -665,12 +673,12 @@ double dt2,double cutoff_r, double L, int np)
 		        for (int cz = -1; cz < 2; cz++)
 		        {
 					// Find the cell I gonna analyse, using PDBs
-					int cellID = (blockIdx.x + cx + 
+					int cellID = modu(blockIdx.x + cx + 
 								cy * nbCellPerAxis + 
-								cz * nbCellPerAxis*nbCellPerAxis)% nbCell;
+								cz * nbCellPerAxis*nbCellPerAxis,nbCell);
 					Cell* myCell = Cdev + cellID;
 					int egoParticle = myCell->particleId[threadIdx.x];
-					if (egoParticle > -1)
+					if (egoParticle > -0.1 && cellID > 0)
 					{
 						position[threadIdx.x + cx+1 + cy+1 + cz+1] = (Pdev+egoParticle)->r[0];
 						position[threadIdx.x + cx+1 + cy+1 + cz+1 + 1] = (Pdev+egoParticle)->r[1];
@@ -725,30 +733,33 @@ double dt2,double cutoff_r, double L, int np)
         }
 		for(int i = 0; i < maxAtomPerCell*27; i+=3)
 		{
-			double dr[3]={
-				position[i  ]-p->r[0],
-				position[i+1]-p->r[1],
-				position[i+2]-p->r[2] };
-            if(on_border)
-            {
-                dr[0] = MINabsDev( dr[0], position[i  ]-wp[0] );
-                dr[1] = MINabsDev( dr[1], position[i+1]-wp[1] );
-                dr[2] = MINabsDev( dr[2], position[i+2]-p->r[2]-wp[2] );
-            }
-            
-            double r2=dr[0]*dr[0]+dr[1]*dr[1]+dr[2]*dr[2];
-            //if(r2>=cutoff_r2)
-            //{  ++nskip1;  continue;  }
-            double dr_V_r=potentialD_1r2(1.0/r2);
-            double r=sqrt(r2);
-            
-            double tmp;
-            tmp=dr_V_r*dr[0];  Adev[id].a[0]+=tmp;  //A[j].a[0]-=tmp; No reciprocity !!!
-            tmp=dr_V_r*dr[1];  Adev[id].a[1]+=tmp;  //A[j].a[1]-=tmp;
-            tmp=dr_V_r*dr[2];  Adev[id].a[2]+=tmp;  //A[j].a[2]-=tmp;
-            
-            //if(r_min>r)  r_min=r;
-            //++ncalc;
+			if (position[i] != 0 && position[i+1] != 0 && position[i+2] != 0)
+			{
+				double dr[3]={
+					position[i  ]-p->r[0],
+					position[i+1]-p->r[1],
+					position[i+2]-p->r[2] };
+	            if(on_border)
+	            {
+	                dr[0] = MINabsDev( dr[0], position[i  ]-wp[0] );
+	                dr[1] = MINabsDev( dr[1], position[i+1]-wp[1] );
+	                dr[2] = MINabsDev( dr[2], position[i+2]-p->r[2]-wp[2] );
+	            }
+	            
+	            double r2=dr[0]*dr[0]+dr[1]*dr[1]+dr[2]*dr[2];
+	            //if(r2>=cutoff_r2)
+	            //{  ++nskip1;  continue;  }
+	            double dr_V_r=potentialD_1r2(1.0/r2);
+	            double r=sqrt(r2);
+	            
+	            double tmp;
+	            tmp=dr_V_r*dr[0];  Adev[id].a[0]+=tmp;  //A[j].a[0]-=tmp; No reciprocity !!!
+	            tmp=dr_V_r*dr[1];  Adev[id].a[1]+=tmp;  //A[j].a[1]-=tmp;
+	            tmp=dr_V_r*dr[2];  Adev[id].a[2]+=tmp;  //A[j].a[2]-=tmp;
+	            
+	            //if(r_min>r)  r_min=r;
+	            //++ncalc;
+			}
 		}
     }
 }
@@ -896,24 +907,6 @@ __host__ __device__ int cellNumber(Particle* p, double cellSize, int nbCellPerAx
 	}
 }
 
-void CreateCells()
-{
-	for(Cell *c=C; c<(C+nbCell); c++)
-	{
-		c->numberPart = 0;
-		for (int i = 0; i < maxAtomPerCell; i++)
-		{
-			c->particleId[i] = -1;
-		}
-	}
-	for(Particle *p=P; p<Pend; p++)
-	{
-		Cell* partCell = & C[cellNumber(p,  cellSize,nbCellPerAxis, nbCell)];
-		partCell->particleId[partCell->numberPart] = p - P;
-		partCell->numberPart++;
-		
-	}
-}
 
 __global__ void ResetCells(Particle *Pdev, Cell *Cdev,double cellSize, int maxAtomPerCell, int nbCellPerAxis, int np, int nbCell)
 {
@@ -921,24 +914,48 @@ __global__ void ResetCells(Particle *Pdev, Cell *Cdev,double cellSize, int maxAt
 	if (id < nbCell)
 	{
 		Cell *c = Cdev+id;
-		c->numberPart = 0;
+		c->numberPart = 1;
 		for (int i = 0; i < maxAtomPerCell; i++)
 		{
 			c->particleId[i] = -1;
 		}
 	}
 }
+
 __global__ void FillCells(Particle *Pdev, Cell *Cdev,double cellSize, int maxAtomPerCell, int nbCellPerAxis, int np, int nbCell)
 {
-	int id = threadIdx.x + blockDim.x*blockIdx.x;
+	int id = blockIdx.x;
 	if (id < np)
 	{
+		//cuPrintf("dev : %d\n", id);
 		Particle *p = Pdev + id;
-		Cell* partCell = & Cdev[cellNumber(p, cellSize, nbCellPerAxis, nbCell)];
-		partCell->particleId[partCell->numberPart] = p - Pdev;
-		partCell->numberPart++;
+		int cellID = cellNumber(p,cellSize,nbCellPerAxis, nbCell);
+		if (cellID < nbCell)
+		{
+			Cell* partCell = Cdev + cellID;
+			int nbP = atomicAdd(&(partCell->numberPart), 1);
+			nbP = (nbP <  maxAtomPerCell)? nbP : maxAtomPerCell - 1;
+			partCell->particleId[nbP] = id;
+		}
 	}
 }
+
+
+/*__global__ void FillCells(Particle *Pdev, Cell *Cdev,double cellSize, int maxAtomPerCell, int nbCellPerAxis, int np, int nbCell)
+{
+	for(int id = 0; id < np;id++)
+	{
+		Particle *p = Pdev + id;
+		int cellID = cellNumber(p,cellSize,nbCellPerAxis, nbCell);
+		if (cellID < nbCell-1)
+		{
+			Cell* partCell = Cdev + cellID;
+			partCell->particleId[partCell->numberPart+1] = id;
+			partCell->numberPart++;
+		}
+	}
+}*/
+
 void deleteSimulation()
 {
     Clear();
@@ -1014,14 +1031,29 @@ int main()
     maxAtomPerCell = 1.5*np/(float)nbCell ; // max number is 1.5* the expected number
     
     C=ALLOC<Cell>(nbCell);
-    for(Cell *c=C; c<(C+nbCell); c++)
-	{
-		c->particleId = ALLOC<int>(maxAtomPerCell);
-	}
-    
-   CreateCells();
     HANDLE_ERROR(cudaMalloc((void **)& Cdev, nbCell*sizeof(Cell)));
     HANDLE_ERROR(cudaMemcpy(Cdev, C, nbCell*sizeof(Cell), cudaMemcpyHostToDevice));
+    Cell *cdev=Cdev;
+    for(Cell *c=C; c<(C+nbCell); c++, cdev++)
+	{
+		c->particleId = ALLOC<int>(maxAtomPerCell);
+		// create a pointer for cudaMalloc to use for embedded pointer device storage
+		int *temp;
+		//allocate device storage for the embedded pointer storage
+		HANDLE_ERROR(cudaMalloc((void **)&temp, maxAtomPerCell*sizeof(int)));
+		//copy this newly created *pointer* to it's proper location in the device copy of the structure
+		HANDLE_ERROR(cudaMemcpy(&(cdev->particleId), &temp, sizeof(int *), cudaMemcpyHostToDevice));
+		//copy the data pointed to by the embedded pointer from the host to the device
+		HANDLE_ERROR(cudaMemcpy(temp, c->particleId, maxAtomPerCell*sizeof(int), cudaMemcpyHostToDevice));
+		//HANDLE_ERROR(cudaMalloc((void **)& (cdev->particleId), maxAtomPerCell*sizeof(int)));
+		//HANDLE_ERROR(cudaMemcpy(cdev->particleId, c->particleId , maxAtomPerCell*sizeof(int), cudaMemcpyHostToDevice));
+	}
+	 ResetCells<<<1,nbCell>>>(Pdev, Cdev, cellSize, maxAtomPerCell, nbCellPerAxis, np, nbCell);
+     FillCells<<<np,1>>>(Pdev, Cdev, cellSize, maxAtomPerCell, nbCellPerAxis, np, nbCell);
+     //FillCells<<<1,1>>>(Pdev, Cdev, cellSize, maxAtomPerCell, nbCellPerAxis, np, nbCell);
+
+    
+    
    //DEBUG BOX
     printf(" L= %f np = %d %f %d %d %d\n", L,  np, cellSize, nbCellPerAxis, nbCell , maxAtomPerCell);
     /*for(Cell *c=C; c<(C+nbCell); c++)
@@ -1094,25 +1126,32 @@ int main()
     double Ekin_sum=0.0;
     double max_s=-1.0;
     double dt2 = dt/2.;
+    cudaPrintfInit();
+    HANDLE_ERROR(cudaDeviceSynchronize());
     for(iter=0; iter<max_steps; iter++)
     {
+		printf("Step %d\n",iter);
 		SimulationStepHalfIntegrator1<<<nbCell,maxAtomPerCell>>>(Pdev, Adev, dt, dt2, L, np);
-        SimulationStepAcceleration<<<nbCell,maxAtomPerCell,maxAtomPerCell*27*3>>>(Pdev, Adev, Cdev, maxAtomPerCell,
+		
+        SimulationStepAcceleration<<<nbCell,maxAtomPerCell,(maxAtomPerCell*27*3)*sizeof(double)>>>(Pdev, Adev, Cdev, maxAtomPerCell,
 					nbCellPerAxis, nbCell, dt, dt2, cutoff_r, L, np);
+				 
         SimulationStepHalfIntegrator2<<<nbCell,maxAtomPerCell>>>(Pdev, Adev, dt2, np);
-        ResetCells<<<1,nbCell>>>(Pdev, Cdev, cellSize, maxAtomPerCell, nbCellPerAxis, np, nbCell);
-        FillCells<<<1,np>>>(Pdev, Cdev, cellSize, maxAtomPerCell, nbCellPerAxis, np, nbCell);
         
+	   ResetCells<<<1,nbCell>>>(Pdev, Cdev, cellSize, maxAtomPerCell, nbCellPerAxis, np, nbCell);
+       FillCells<<<np,1>>>(Pdev, Cdev, cellSize, maxAtomPerCell, nbCellPerAxis, np, nbCell);
         
         bool do_sample = (iter>pcf_skip && !(iter%pcf_samples));
         bool do_dump = (!(iter%dumpfreq) || iter+1==max_steps);
         bool do_write_curr = !(iter%(iter<=pcf_skip ? currfreq0 : currfreq1));
+        
         if (do_write_curr || do_sample || do_dump)
         {
 			printf("Time to log\n");
 			HANDLE_ERROR(cudaDeviceSynchronize());
 			HANDLE_ERROR(cudaMemcpy(A, Adev, np*sizeof(Accel), cudaMemcpyDeviceToHost));
 			HANDLE_ERROR(cudaMemcpy(P, Pdev, np*sizeof(Particle), cudaMemcpyDeviceToHost));
+			//cudaPrintfDisplay(stdout, true);
 			
 		}
         if(do_sample)
@@ -1236,7 +1275,7 @@ int main()
             p_sum/nacc);
     }
    
-
+	cudaPrintfEnd();
     deleteSimulation();
     return EXIT_SUCCESS;
 }

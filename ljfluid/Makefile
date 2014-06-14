@@ -11,8 +11,8 @@ CC=nvcc
 LD=nvcc
 
 NVCC=nvcc
-NVCFLAGS=-c -g -O3 -I$(CUDA_INC_PATH)  
-LDFLAGS= -L$(CUDA_LIB_PATH) -lcudart -lcuda
+NVCFLAGS=-c -g -O3 -I$(CUDA_INC_PATH)  -G -arch=sm_11
+LDFLAGS= -L$(CUDA_LIB_PATH) -lcudart -lcuda -g
 
 
 
@@ -52,6 +52,7 @@ CUDA_LIB_PATH=/usr/local/cuda/lib64
 fluid-cuda :
 	$(NVCC) $(NVCFLAGS) fluid.cu -o fluid-cuda.o
 	$(NVCC) $(NVCFLAGS) alloc.cc -o alloc-cuda.o
+	#$(NVCC) $(NVCFLAGS) cuPrintf.cu -o cuPrintf.o
 	$(NVCC) $(LDFLAGS) fluid-cuda.o alloc-cuda.o -o fluid-cuda
 
 
