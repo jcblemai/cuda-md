@@ -44,3 +44,6 @@ diff <(./fluid | gnuplot) <(./fluid-cuda | gnuplot)
 diff <(./fluid) <(./fluid-cuda)
 
 Pas same entry --> c'est a cause des flags compilateurs --> meme flags
+
+
+1m43.198s

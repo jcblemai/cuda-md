@@ -866,7 +866,7 @@ void SimFluid()
 	
 	//sim.Initialize(500,/*dt=*/5e-3,/*rho=*/1.3,/*cutoff_r=*/3.0,
 	//	/*initial_speed=*/1.0);
-	sim.Initialize(2074,/*dt=*/5e-3,/*rho=*/1.2,/*cutoff_r=*/1.0,
+	sim.Initialize(2074,/*dt=*/5e-3,/*rho=*/1.2,/*cutoff_r=*/2.0,
 		/*initial_speed=*/3.0);
 	sim.InitializePCF(200,3.5);
 	
@@ -899,12 +899,12 @@ void SimFluid()
 // number versus speed). 
 //
 	int max_steps=100;  // Max number of <dt> steps to calculate. 
-	int pcf_samples=8;   // Compute PCF every this many dt cycles. 
+	int pcf_samples=20;   // Compute PCF every this many dt cycles. 
 	int pcf_skip=400;    // Skip these many steps before PCF accumulation
-	int dumpfreq=100;    // Dump status every this many dt cycles. 
-	int currfreq1=10;    // Record p,T,E/N every this many dt cycles after 
+	int dumpfreq=300;    // Dump status every this many dt cycles. 
+	int currfreq1=30;    // Record p,T,E/N every this many dt cycles after 
 	                     // pcf_skip have been skipped. 
-	int currfreq0=2;     // Record p,T,E/N every this many dt cycles for 
+	int currfreq0=30;     // Record p,T,E/N every this many dt cycles for 
 	                     // iterations 0..pcf_skip. 
 	
 	// Stop if PCF function accumulation if max. sigma is smaller than this. 
@@ -933,7 +933,6 @@ void SimFluid()
 	double max_s=-1.0;
 	for(iter=0; iter<max_steps; iter++)
 	{
-		printf("Step %d\n",iter);
 		sim.SimulationStep();
 		
 		bool do_sample = (iter>pcf_skip && !(iter%pcf_samples));
@@ -950,7 +949,7 @@ void SimFluid()
 		
 		if(do_write_curr || do_sample || do_dump)
 		{
-			printf("Time to log\n");
+			//printf("Time to log\n");
 			// Now as we have the current PCF, we can compute the current 
 			// potential energy. 
 			Epot=sim.ComputeEpot(curr_pcf,

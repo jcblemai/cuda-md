@@ -403,11 +403,9 @@ void Initialize(int n,double _dt,double _rho,double _cutoff_r,
     
     // Compute initial values for the acceleration: 
     _CalcAccel();
-    printf("FF\n");
     // Copy on device
     HANDLE_ERROR(cudaMalloc((void **)& Adev, np*sizeof(Accel)));
     HANDLE_ERROR(cudaMalloc((void **)& Pdev, np*sizeof(Particle)));
-     printf("FF\n");
     HANDLE_ERROR(cudaMemcpy(Adev, A, np*sizeof(Accel), cudaMemcpyHostToDevice));
     HANDLE_ERROR(cudaMemcpy(Pdev, P, np*sizeof(Particle), cudaMemcpyHostToDevice));
     
@@ -733,7 +731,7 @@ double dt2,double cutoff_r, double L, int np)
         }
 		for(int i = 0; i < maxAtomPerCell*27; i+=3)
 		{
-			if (position[i] != 0 && position[i+1] != 0 && position[i+2] != 0)
+			if (position[i] != 0 && position[i+1] != 0 && position[i+2] != 0 && (threadIdx.x + 3) != i) //existing atom and not me
 			{
 				double dr[3]={
 					position[i  ]-p->r[0],
@@ -922,6 +920,7 @@ __global__ void ResetCells(Particle *Pdev, Cell *Cdev,double cellSize, int maxAt
 	}
 }
 
+/* Attibute atoms to cell */
 __global__ void FillCells(Particle *Pdev, Cell *Cdev,double cellSize, int maxAtomPerCell, int nbCellPerAxis, int np, int nbCell)
 {
 	int id = blockIdx.x;
@@ -939,22 +938,6 @@ __global__ void FillCells(Particle *Pdev, Cell *Cdev,double cellSize, int maxAto
 		}
 	}
 }
-
-
-/*__global__ void FillCells(Particle *Pdev, Cell *Cdev,double cellSize, int maxAtomPerCell, int nbCellPerAxis, int np, int nbCell)
-{
-	for(int id = 0; id < np;id++)
-	{
-		Particle *p = Pdev + id;
-		int cellID = cellNumber(p,cellSize,nbCellPerAxis, nbCell);
-		if (cellID < nbCell-1)
-		{
-			Cell* partCell = Cdev + cellID;
-			partCell->particleId[partCell->numberPart+1] = id;
-			partCell->numberPart++;
-		}
-	}
-}*/
 
 void deleteSimulation()
 {
@@ -1024,7 +1007,7 @@ int main()
         /*initial_speed=*/3.0);
     InitializePCF(200,3.5);
     
-    //Initialize Cell WARNING : should me a multiple !
+    //Initialize Cell WARNING : should be a multiple !
     cellSize = cutoff_r;
     nbCellPerAxis = floor(L/cellSize);
     nbCell = pow(nbCellPerAxis,3);
@@ -1055,7 +1038,7 @@ int main()
     
     
    //DEBUG BOX
-    printf(" L= %f np = %d %f %d %d %d\n", L,  np, cellSize, nbCellPerAxis, nbCell , maxAtomPerCell);
+    //printf(" L= %f np = %d %f %d %d\n", L,  np, cellSize, nbCellPerAxis, nbCell* maxAtomPerCell);
     /*for(Cell *c=C; c<(C+nbCell); c++)
 	{
 		printf("%d : %d \n",c-C,c->numberPart);
@@ -1092,14 +1075,14 @@ int main()
 // on the bottom a normalized velocity distribution (particle serial 
 // number versus speed). 
 // 
-    int max_steps=100;  // Max number of <dt> steps to calculate. 
-    int pcf_samples=8;   // Compute PCF every this many dt cycles. 
-    int pcf_skip=400;    // Skip these many steps before PCF accumulation
-    int dumpfreq=100;    // Dump status every this many dt cycles. 
-    int currfreq1=10;    // Record p,T,E/N every this many dt cycles after 
-                         // pcf_skip have been skipped. 
-    int currfreq0=2;     // Record p,T,E/N every this many dt cycles for 
-                         // iterations 0..pcf_skip. 
+	int max_steps=100;  // Max number of <dt> steps to calculate. 
+	int pcf_samples=20;   // Compute PCF every this many dt cycles. 
+	int pcf_skip=400;    // Skip these many steps before PCF accumulation
+	int dumpfreq=300;    // Dump status every this many dt cycles. 
+	int currfreq1=30;    // Record p,T,E/N every this many dt cycles after 
+	                     // pcf_skip have been skipped. 
+	int currfreq0=30;     // Record p,T,E/N every this many dt cycles for 
+	                     // iterations 0..pcf_skip. 
     
     // Stop if PCF function accumulation if max. sigma is smaller than this. 
     double pcf_sigma=0.015;
@@ -1127,10 +1110,9 @@ int main()
     double max_s=-1.0;
     double dt2 = dt/2.;
     cudaPrintfInit();
-    HANDLE_ERROR(cudaDeviceSynchronize());
+    //HANDLE_ERROR(cudaDeviceSynchronize());
     for(iter=0; iter<max_steps; iter++)
     {
-		printf("Step %d\n",iter);
 		SimulationStepHalfIntegrator1<<<nbCell,maxAtomPerCell>>>(Pdev, Adev, dt, dt2, L, np);
 		
         SimulationStepAcceleration<<<nbCell,maxAtomPerCell,(maxAtomPerCell*27*3)*sizeof(double)>>>(Pdev, Adev, Cdev, maxAtomPerCell,
@@ -1147,7 +1129,7 @@ int main()
         
         if (do_write_curr || do_sample || do_dump)
         {
-			printf("Time to log\n");
+			//printf("Time to log\n");
 			HANDLE_ERROR(cudaDeviceSynchronize());
 			HANDLE_ERROR(cudaMemcpy(A, Adev, np*sizeof(Accel), cudaMemcpyDeviceToHost));
 			HANDLE_ERROR(cudaMemcpy(P, Pdev, np*sizeof(Particle), cudaMemcpyDeviceToHost));
